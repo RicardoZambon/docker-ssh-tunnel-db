@@ -22,24 +22,31 @@ ENV SSH_PORT=${SSH_PORT}
 ENV DB_HOST=${DB_HOST}
 ENV DB_PORT=${DB_PORT}
 
+# SSH key auth (provided at runtime only; keys are never baked into the image)
+ENV SSH_KEY_PATH=/root/.ssh/id_rsa
+ENV SSH_SERVER_ALIVE_INTERVAL=5
+
 # Set timezone
 ENV TIMEZONE="Asia/Jakarta"
 
 # Set workdir
 WORKDIR /root
 
-# Install the tools, add it to virtual environment
+# Install the tools
 RUN apk add --no-cache \
     tzdata \
     ca-certificates \
     openssh \
     openssh-client \
-    sshpass \
-    autossh && \
+    sshpass && \
     echo "${TIMEZONE}" >  /etc/timezone
+
+# Copy the entrypoint that auto-detects SSH key vs password auth
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Expose port for MySQL, MS SQL, and PostgreSQL
 EXPOSE 3306 1433 5432
 
-# Command, use a plain text
-ENTRYPOINT sshpass -p ${SSH_PASSWORD:-ssh_password} ssh -p ${SSH_PORT:-ssh_port} -o StrictHostKeyChecking=no -N -L *:${DB_PORT:-db_port}:${DB_HOST:-db_host}:${DB_PORT:-db_port} ${SSH_USER:-ssh_user}@${SSH_HOST:-ssh_host}
+# Establish the tunnel; auth (SSH key or password) is auto-detected at runtime
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
